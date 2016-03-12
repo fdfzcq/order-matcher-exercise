@@ -21,6 +21,10 @@ package com.cinnober.exercise.ordermatcher;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.stream.*;
+import java.util.Collections;
+import java.util.Comparator;
 
 /**
  * Order book with continuous matching of limit orders with time priority.
@@ -53,6 +57,9 @@ import java.util.List;
  */
 public class OrderMatcher {
 
+    private List<Trade> tradeList = new ArrayList<Trade>();
+    private List<Order> orderList = new ArrayList<Order>();
+
     /**
      * Create a new order matcher.
      */
@@ -66,7 +73,61 @@ public class OrderMatcher {
      * @return any trades that were created by this order, not null.
      */
     public List<Trade> addOrder(Order order) {
-        throw new UnsupportedOperationException("addOrder is not implemented yet"); // FIXME
+        List<Order> newOrderList = new ArrayList<Order>();
+        if(order.getQuantity()!=0){
+            orderList.add(order);
+            for(Order passiveOrder:orderList){
+                if(passiveOrder.getQuantity()!=0 && order.getQuantity()!=0){
+                    switch(order.getSide()){
+                        case BUY:
+                            if(passiveOrder.getSide().equals(Side.SELL) && order.getPrice() >= passiveOrder.getPrice()){
+                                createTrade(passiveOrder,order,newOrderList);
+                            }else{
+                               newOrderList.add(passiveOrder);
+                            }
+                            break;
+                        case SELL:
+                            if(passiveOrder.getSide().equals(Side.BUY) && order.getPrice() <= passiveOrder.getPrice()){
+                                createTrade(passiveOrder,order,newOrderList);
+                            }else{
+                                newOrderList.add(passiveOrder);
+                            }
+                            break;
+                    }
+                }else if(order.getQuantity()==0 && passiveOrder.getQuantity()!=0){
+                        newOrderList.add(passiveOrder);
+                }
+            }
+        }
+        orderList = newOrderList;
+        System.out.println("trade: ");
+        tradeList.stream().map(Trade::toString).forEach(System.out::println);
+        return tradeList;
+        //throw new UnsupportedOperationException("addOrder is not implemented yet"); // FIXME
+    }
+
+    /**
+     * Generate trade data and modify old order information
+     *
+     * @param passiveOrder the order that was already added in the list, not null.
+     * @param order the order that was recently added, not null.
+     * @param newOrderList the new order list to store modified orders other orders which are not modified.
+     */
+    private void createTrade(Order passiveOrder,Order order, List<Order> newOrderList){
+        if(passiveOrder.getQuantity()>order.getQuantity()){
+            tradeList.add(new Trade(order.getId(),passiveOrder.getId(),passiveOrder.getPrice(),order.getQuantity()));
+            passiveOrder.setQuantity(passiveOrder.getQuantity()-order.getQuantity());
+            order.setQuantity(0);
+            newOrderList.add(passiveOrder);
+        }else if(passiveOrder.getQuantity()<order.getQuantity()){
+            tradeList.add(new Trade(order.getId(),passiveOrder.getId(),passiveOrder.getPrice(),passiveOrder.getQuantity()));
+            order.setQuantity(order.getQuantity()-passiveOrder.getQuantity());
+            passiveOrder.setQuantity(0);
+        }else{
+            tradeList.add(new Trade(order.getId(),passiveOrder.getId(),passiveOrder.getPrice(),order.getQuantity()));
+            order.setQuantity(0);
+            passiveOrder.setQuantity(0);
+        }
     }
 
     /**
@@ -79,10 +140,29 @@ public class OrderMatcher {
      * @return all remaining orders in the order book, in priority order, for the specified side, not null.
      */
     public List<Order> getOrders(Side side) {
-        throw new UnsupportedOperationException("getOrders is not implemented yet"); // FIXME
+        //throw new UnsupportedOperationException("getOrders is not implemented yet"); // FIXME
+        List<Order> outputList = new ArrayList<Order>();
+        if(side.equals(Side.BUY)){
+            outputList = orderList.stream().filter(j -> j.getSide().equals(Side.BUY)).collect(Collectors.toList());
+            Collections.sort(outputList,new Comparator<Order>(){
+                @Override
+                public int compare(Order o1, Order o2){
+                    return Long.valueOf(o2.getPrice()).compareTo(Long.valueOf(o1.getPrice()));
+                }
+            });
+        }else{
+            outputList = orderList.stream().filter(j -> j.getSide().equals(Side.SELL)).collect(Collectors.toList());
+            Collections.sort(outputList,new Comparator<Order>(){
+                @Override
+                public int compare(Order o1, Order o2){
+                    return Long.valueOf(o1.getPrice()).compareTo(Long.valueOf(o2.getPrice()));
+                }
+            });
+        }
+        System.out.println("orders: ");
+        outputList.stream().map(Order::toString).forEach(System.out::println);
+        return outputList;
     }
-
-
 
     public static void main(String... args) throws Exception {
         OrderMatcher matcher = new OrderMatcher();
